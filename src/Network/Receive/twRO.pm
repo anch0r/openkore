@@ -40,7 +40,14 @@ sub new {
 		'006D' => ['character_creation_successful', 'a4 V9 v V2 v14 Z24 C6 v2 Z*', [qw(charID exp zeny exp_job lv_job opt1 opt2 option stance manner points_free hp hp_max sp sp_max walk_speed type hair_style weapon lv points_skill lowhead shield tophead midhead hair_color clothes_color name str agi vit int dex luk slot renameflag mapname)]],
 		'0097' => ['private_message', 'v Z28 Z*', [qw(len privMsgUser privMsg)]],
 		'082D' => ['received_characters_info', 'x2 C5 x20', [qw(normal_slot premium_slot billing_slot producible_slot valid_slot)]],
+		'0984' => ['actor_status_active', 'a4 v V4', [qw(ID type tick unknown1 unknown2 unknown3)]],
+        '0983' => ['actor_status_active', 'v a4 C V4', [qw(type ID flag tick unknown1 unknown2 unknown3)]], 
 	);
+	foreach my $switch (keys %packets) { $self->{packet_list}{$switch} = $packets{$switch}; }
+   
+           my %handlers = qw(
+                    actor_status_active 0983
+   );
 	$self->{packet_list}{$_} = $packets{$_} for keys %packets;
 
 	return $self;
@@ -58,7 +65,7 @@ sub gameguard_request {
 	
 	my $task; #Initialise
 	my $relogDelay = int(rand(int($timeout{'NProtect_relog_delay'}{'timeout'})) + 1) + 300 || 300;
-	my $relogSecond = int(rand($timeout{'NProtect_relog_second'}{'timeout'}) + 1) + 30 || 30;
+	my $relogSecond = int(rand($timeout{'NProtect_relog_second'}{'timeout'}) + 1) + 20 || 20;
 	error TF("NProtect check request received. Re-loging in %s seconds.\n", $relogDelay), 'info';
 	
 	if ($config{NProtect} == 1) {

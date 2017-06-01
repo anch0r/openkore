@@ -49,7 +49,8 @@ ignoreInvalidLogin 0
 secureLogin_requestCode
 # 安全登入需求碼［16進位］
 # 如果遊戲伺服器要求安全連線，此處輸入安全需求碼
-
+pauseLoginPin 3
+# 輸入滑鼠鎖前等候時間 [ 秒 ]
 
 
 #═════════════════════════════════════

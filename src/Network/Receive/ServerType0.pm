@@ -566,6 +566,10 @@ sub new {
 		'09DD' => ['actor_exists', 'v C a4 a4 v3 V v11 a4 a2 v V C2 a3 C3 v2 a9 Z*', [qw(len object_type ID charID walk_speed opt1 opt2 option type hair_style weapon shield lowhead tophead midhead hair_color clothes_color head_dir costume guildID emblemID manner opt3 stance sex coords xSize ySize act lv font opt4 name)]],
 		'09DE' => ['private_message', 'v V Z25 Z*', [qw(len charID privMsgUser privMsg)]],
 		'09DF' => ['private_message_sent', 'C V', [qw(type charID)]],
+		'09F8' => ['quest_all_list3', 'v3 a*', [qw(len count unknown message)]],
+		'09FD' => ['actor_moved', 'v C a4 a4 v3 V v5 a4 v6 a4 a2 v V C2 a6 C2 v2 a9 Z', [qw(len object_type ID unknown walk_speed opt1 opt2 option type hair_style weapon shield lowhead tick tophead midhead hair_color clothes_color head_dir costume guildID emblemID manner opt3 stance sex coords xSize ySize lv font opt4 name)]],
+        '09FE' => ['actor_connected', 'v C a4 a4 v3 V v11 a4 a2 v V C2 a3 C2 v2 a9 Z', [qw(len object_type ID unknown walk_speed opt1 opt2 option type hair_style weapon shield lowhead tophead midhead hair_color clothes_color head_dir costume guildID emblemID manner opt3 stance sex coords xSize ySize lv font opt4 name)]],
+        '09FF' => ['actor_exists', 'v C a4 a4 v3 V v11 a4 a2 v V C2 a3 C3 v2 a9 Z*', [qw(len object_type ID unknown walk_speed opt1 opt2 option type hair_style weapon shield lowhead tophead midhead hair_color clothes_color head_dir costume guildID emblemID manner opt3 stance sex coords xSize ySize act lv font opt4 name)]],
 		'0A09' => ['deal_add_other', 'v C V C3 a8 a25', [qw(nameID type amount identified broken upgrade cards options)]],
 		'0A0A' => ['storage_item_added', 'v V v C4 a8 a25', [qw(index amount nameID type identified broken upgrade cards options)]],
 		'0A0B' => ['cart_item_added', 'v V v C4 a8 a25', [qw(index amount nameID type identified broken upgrade cards options)]],
@@ -578,6 +582,8 @@ sub new {
 		'0A28' => ['vending_confirm', 'C', [qw(success)]],
 		'0A34' => ['senbei_amount', 'V', [qw(amount)]], #new senbei system (new cash currency)
 		'0A3B' => ['misc_effect', 'v a4 C v', [qw(len ID flag effect)]],
+		'0A95' => ['party_allow_invite', 'C', [qw(type)]],
+		'0AB8' => ['skill_msg', 'v V', [qw(id msgid)]],
 		'C350' => ['senbei_vender_items_list'], #new senbei vender, need research
 	};
 

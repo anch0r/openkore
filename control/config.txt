@@ -2215,7 +2215,12 @@ logToFile_Messages 0
 # 是否記錄所有訊息記錄
 logToFile_Warnings 0
 # 是否記錄警告訊息記錄
-
+logDeath 1
+# 是否要開啟角色死亡記錄，在 logs/deathlog.txt
+# Plugin 功能，若 openkore/plugins/ 裡沒有 Autopsy.pl 的話此功能無效
+logDeathSize 50
+# 角色死亡記錄的行數，記錄死亡前幾行的訊息
+deathMessage 您已經死了
 #═══════════════════════
 #║ LOG 紀錄檔 ［其它］ ║
 #═══════════════════════

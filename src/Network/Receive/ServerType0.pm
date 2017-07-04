@@ -577,9 +577,12 @@ sub new {
 		'0A0D' => ['inventory_items_nonstackable', 'v a*', [qw(len itemInfo)]],
 		'0A0F' => ['cart_items_nonstackable', 'v a*', [qw(len itemInfo)]],
 		'0A10' => ['storage_items_nonstackable', 'v Z24 a*', [qw(len title itemInfo)]],
+		'0A23' => ['achievement_list', 'v', [qw(len)]],
+		'0A24' => ['achievement_update'],
 		'0A2D' => ['character_equip', 'v Z24 x17 a*', [qw(len name itemInfo)]],
 		'0A27' => ['hp_sp_changed', 'v2', [qw(type amount)]],
 		'0A28' => ['vending_confirm', 'C', [qw(success)]],
+		'0A30' => ['actor_info', 'a4 Z24 Z24 Z24 Z24 x4', [qw(ID name partyName guildName guildTitle)]],
 		'0A34' => ['senbei_amount', 'V', [qw(amount)]], #new senbei system (new cash currency)
 		'0A3B' => ['misc_effect', 'v a4 C v', [qw(len ID flag effect)]],
 		'0A95' => ['party_allow_invite', 'C', [qw(type)]],

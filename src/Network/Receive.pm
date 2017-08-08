@@ -259,7 +259,7 @@ sub received_characters_unpackString {
 	for ($masterServer && $masterServer->{charBlockSize}) {
 		# unknown purpose (0 = disabled, otherwise displays "Add-Ons" sidebar) (from rA)
 		# change $hairstyle
-		return 'a4 V9 v V2 v4 V v9 Z24 C8 v Z16 V x4 x4 x4 x1' if $_ == 147;
+		return 'a4 V9 v V2 v4 V v9 Z24 C8 v Z16 V x4 x4 x4 C1' if $_ == 147;
 		return 'a4 V9 v V2 v14 Z24 C8 v Z16 V x4 x4 x4 x1' if $_ == 145;
 		return 'a4 V9 v V2 v14 Z24 C8 v Z16 V x4 x4 x4' if $_ == 144;
 		# change slot feature
@@ -1412,44 +1412,57 @@ sub sage_autospell {
 
 sub show_eq {
 	my ($self, $args) = @_;
-
-	my $jump = 26;
-
-	my $unpack_string  = "v ";
-	   $unpack_string .= "v C2 v v C2 ";
-	   $unpack_string .= "a8 ";
-	   $unpack_string .= "a6"; #unimplemented in eA atm
-
-	if (exists $args->{robe}) {  # check packet version
-		$unpack_string .= "v "; # ??
-		$jump += 2;
+	my $item_info;
+	my @item;
+	
+	if ($args->{switch} eq '02D7') {  # PACKETVER DEFAULT	
+		$item_info = {
+			len => 26,
+			types => 'a2 v C2 v2 C2 a8 l v',
+			keys => [qw(ID nameID type identified type_equip equipped broken upgrade cards expire bindOnEquipType)],
+		};
+		
+		if (exists $args->{robe}) {  # PACKETVER >= 20100629
+			$item_info->{type} .= 'v';
+			$item_info->{len} += 2;
+		}
+		
+	} elsif ($args->{switch} eq '0859') { # PACKETVER >= 20101124	
+		$item_info = {
+			len => 28,
+			types => 'a2 v C2 v2 C2 a8 l v2',
+			keys => [qw(ID nameID type identified type_equip equipped broken upgrade cards expire bindOnEquipType sprite_id)],
+		};
+		
+	} elsif ($args->{switch} eq '0997') { # PACKETVER >= 20120925
+		$item_info = {
+			len => 31,
+			types => 'a2 v C V2 C a8 l v2 C',
+			keys => [qw(ID nameID type type_equip equipped upgrade cards expire bindOnEquipType sprite_id identified)],
+		};
+		
+	} elsif ($args->{switch} eq '0A2D') { # PACKETVER >= 20150226
+		$item_info = {
+			len => 57,
+			types => 'a2 v C V2 C a8 l v2 C a25 C',
+			keys => [qw(ID nameID type type_equip equipped upgrade cards expire bindOnEquipType sprite_id num_options options identified)],
+		};
+	} else { # this can't happen
+		return; 
 	}
+	
+	message "--- $args->{name} Equip Info --- \n";
 
-	for (my $i = 0; $i < length($args->{equips_info}); $i += $jump) {
-		my ($index,
-			$ID, $type, $identified, $type_equip, $equipped, $broken, $upgrade, # typical for nonstackables
-			$cards,
-			$expire) = unpack($unpack_string, substr($args->{equips_info}, $i));
-
-		my $item = {};
-		$item->{index} = $index;
-
-		$item->{nameID} = $ID;
-		$item->{type} = $type;
-
-		$item->{identified} = $identified;
-		$item->{type_equip} = $type_equip;
-		$item->{equipped} = $equipped;
-		$item->{broken} = $broken;
-		$item->{upgrade} = $upgrade;
-
-		$item->{cards} = $cards;
-
-		$item->{expire} = $expire;
-
+	for (my $i = 0; $i < length($args->{equips_info}); $i += $item_info->{len}) {
+		my $item;		
+		@{$item}{@{$item_info->{keys}}} = unpack($item_info->{types}, substr($args->{equips_info}, $i, $item_info->{len}));			
+		$item->{broken} = 0;
+		$item->{idenfitied} = 1;		
 		message sprintf("%-20s: %s\n", $equipTypes_lut{$item->{equipped}}, itemName($item)), "list";
-		debug "$index, $ID, $type, $identified, $type_equip, $equipped, $broken, $upgrade, $cards, $expire\n";
 	}
+	
+	message "----------------- \n";
+	
 }
 
 sub show_eq_msg_other {
@@ -1774,9 +1787,9 @@ sub login_pin_code_request {
 		message T("Server requested PIN password in order to select your character.\n"), "connection";
 		return if ($config{loginPinCode} eq '' && !($self->queryAndSaveLoginPinCode()));
 		if ($config{pauseLoginPin}) {
-			message T("Pausing for " . $config{pauseLoginPin} . " second(s)...\n"), "system";
-			sleep $config{pauseLoginPin};
-		}
+ 			message T("Pausing for " . $config{pauseLoginPin} . " second(s)...\n"), "system";
+ 			sleep $config{pauseLoginPin};
+ 		}
 		$messageSender->sendLoginPinCode($args->{seed}, 0);
 	} elsif ($args->{flag} == 2) {
 		# PIN code has never been set before, so set it.
@@ -1861,6 +1874,48 @@ sub actor_status_active {
 	$args->{skillName} = defined $statusName{$status} ? $statusName{$status} : $status;
 #	($args->{actor} = Actor::get($ID))->setStatus($status, 1, $tick == 9999 ? undef : $tick, $args->{unknown1}); # need test for '08FF'
 	($args->{actor} = Actor::get($ID))->setStatus($status, $flag, $tick == 9999 ? undef : $tick);
+		#Shield Spell Buffs
+	if ($type == 396) {
+		if ($flag == 0) {
+			if (exists $args->{actor}->{statuses}{$statusHandle{'2014'}}) {
+				$args->{actor}->setStatus($statusHandle{'2014'}, 0);
+			} elsif (exists $args->{actor}->{statuses}{$statusHandle{'2015'}}) {
+				$args->{actor}->setStatus($statusHandle{'2015'}, 0);
+			}
+		} elsif (defined $unknown2) {
+			if ($unknown2 == 2) {
+				if (exists $args->{actor}->{statuses}{$statusHandle{'2015'}}) {
+					$args->{actor}->setStatus($statusHandle{'2015'}, 0);
+				}
+				$args->{actor}->setStatus($statusHandle{'2014'}, $flag, $tick == 9999 ? undef : $tick);
+			} elsif ($unknown2 == 3) {
+				if (exists $args->{actor}->{statuses}{$statusHandle{'2014'}}) {
+					$args->{actor}->setStatus($statusHandle{'2014'}, 0);
+				}
+				$args->{actor}->setStatus($statusHandle{'2015'}, $flag, $tick == 9999 ? undef : $tick);
+			}
+		}
+	} elsif ($type == 398) {
+		if ($flag == 0) {
+			if (exists $args->{actor}->{statuses}{$statusHandle{'2016'}}) {
+				$args->{actor}->setStatus($statusHandle{'2016'}, 0);
+			} elsif (exists $args->{actor}->{statuses}{$statusHandle{'2017'}}) {
+				$args->{actor}->setStatus($statusHandle{'2017'}, 0);
+			}
+		} elsif (defined $unknown2) {
+			if ($unknown2 == 1) {
+				if (exists $args->{actor}->{statuses}{$statusHandle{'2017'}}) {
+					$args->{actor}->setStatus($statusHandle{'2017'}, 0);
+				}
+				$args->{actor}->setStatus($statusHandle{'2016'}, $flag, $tick == 9999 ? undef : $tick);
+			} elsif ($unknown2 == 2) {
+				if (exists $args->{actor}->{statuses}{$statusHandle{'2016'}}) {
+					$args->{actor}->setStatus($statusHandle{'2016'}, 0);
+				}
+				$args->{actor}->setStatus($statusHandle{'2017'}, $flag, $tick == 9999 ? undef : $tick);
+			}
+		}
+	}
 	# Rolling Cutter counters.
 	if ( $type == 0x153 && $char->{spirits} != $unknown1 ) {
 		$char->{spirits} = $unknown1 || 0;
@@ -2175,15 +2230,20 @@ sub quest_add {
 	unless (%$quest) {
 		message TF("Quest: %s has been added.\n", $quests_lut{$questID} ? "$quests_lut{$questID}{title} ($questID)" : $questID), "info";
 	}
+	my $pack = 'a0 V v Z24';
+	$pack = 'V x4 V x4 v Z24' if $args->{switch} eq '09F9';
+	my $pack_len = length pack $pack, ( 0 ) x 7;
 
 	$quest->{time_start} = $args->{time_start};
 	$quest->{time} = $args->{time};
 	$quest->{active} = $args->{active};
 	debug $self->{packet_list}{$args->{switch}}->[0] . " " . join(', ', @{$args}{@{$self->{packet_list}{$args->{switch}}->[2]}}) ."\n";
+	my $o = 17;
 	for (my $i = 0; $i < $args->{amount}; $i++) {
-		my ($mobID, $count, $mobName) = unpack('V v Z24', substr($args->{RAW_MSG}, 17+$i*30, 30));
-		my $mission = \%{$quest->{missions}->{$mobID}};
+		my ( $conditionID, $mobID, $count, $mobName ) = unpack $pack, substr $args->{RAW_MSG}, $o + $i * $pack_len, $pack_len;
+		my $mission = \%{$quest->{missions}->{$conditionID || $mobID}};
 		$mission->{mobID} = $mobID;
+		$mission->{conditionID} = $conditionID;
 		$mission->{count} = $count;
 		$mission->{mobName} = bytesToString($mobName);
 		debug "- $mobID $count $mobName\n", "info";
@@ -2197,12 +2257,14 @@ sub quest_delete {
 	message TF("Quest: %s has been deleted.\n", $quests_lut{$questID} ? "$quests_lut{$questID}{title} ($questID)" : $questID), "info";
 	delete $questList->{$questID};
 }
-
+# 09FA
 sub parse_quest_update_mission_hunt {
-	my ($self, $args) = @_;
-	@{$args->{mobs}} = map {
-		my %result; @result{qw(questID mobID count)} = unpack 'V2 v', $_; \%result
-	} unpack '(a10)*', $args->{mobInfo};
+	my ( $self, $args ) = @_;
+	if ( $args->{switch} eq '09FA' ) {
+		@{ $args->{mobs} } = map { my %result; @result{qw(questID mobID goal count)} = unpack 'V2 v2', $_; \%result } unpack '(a12)*', $args->{mobInfo};
+	} else {
+		@{ $args->{mobs} } = map { my %result; @result{qw(questID mobID count)} = unpack 'V2 v', $_; \%result } unpack '(a10)*', $args->{mobInfo};
+	}
 }
 
 sub reconstruct_quest_update_mission_hunt {
@@ -2259,6 +2321,51 @@ sub forge_list {
 		#my $charID = substr($args->{RAW_MSG}, $i+4, 4);
 	}
 	message "=========================\n";
+}
+
+# Parse 0A3B with structure
+# '0A3B' => ['hat_effect', 'v a4 C a*', [qw(len ID flag effect)]],
+# Unpack effect info into HatEFID
+# @author [Cydh]
+sub parse_hat_effect {
+	my ($self, $args) = @_;
+	@{$args->{effects}} = map {{ HatEFID => unpack('v', $_) }} unpack '(a2)*', $args->{effect};
+	debug "Hat Effect. Flag: ".$args->{flag}." HatEFIDs: ".(join ', ', map {$_->{HatEFID}} @{$args->{effects}})."\n";
+}
+
+# Display information for player's Hat Effects
+# @author [Cydh]
+sub hat_effect {
+	my ($self, $args) = @_;
+
+	my $actor = Actor::get($args->{ID});
+	my $hatName;
+	my $i = 0;
+
+	#TODO: Stores the hat effect into actor for single player's information
+	for my $hat (@{$args->{effects}}) {
+		my $hatHandle;
+		$hatName .= ", " if ($i);
+		if (defined $hatEffectHandle{$hat->{HatEFID}}) {
+			$hatHandle = $hatEffectHandle{$hat->{HatEFID}};
+			$hatName .= defined $hatEffectName{$hatHandle} ? $hatEffectName{$hatHandle} : $hatHandle;
+		} else {
+			$hatName .= T("Unknown #").$hat->{HatEFID};
+		}
+		$i++;
+	}
+
+	if ($args->{flag} == 1) {
+		message sprintf(
+			$actor->verb(T("%s use effect: %s\n"), T("%s uses effect: %s\n")),
+			$actor, $hatName
+		), 'effect';
+	} else {
+		message sprintf(
+			$actor->verb(T("%s are no longer: %s\n"), T("%s is no longer: %s\n")),
+			$actor, $hatName
+		), 'effect';
+	}
 }
 
 1;

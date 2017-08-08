@@ -22,7 +22,7 @@ use Misc qw(stripLanguageCode);
 use Network::Send ();
 use base qw(Network::Send);
 use Plugins;
-use Globals qw($accountID $sessionID $sessionID2 $accountSex $char $charID %config %guild @chars $masterServer $syncSync);
+use Globals qw($accountID $sessionID $sessionID2 $accountSex $char $charID %config %guild @chars $masterServer $syncSync $rodexList $rodexWrite);
 use Log qw(debug);
 use Translation qw(T TF);
 use I18N qw(bytesToString stringToBytes);
@@ -39,10 +39,11 @@ sub new {
 	my $self = $class->SUPER::new(@_);
 	
 	my %packets = (
-		'0064' => ['master_login', 'V Z24 Z24 C', [qw(version username password master_version)]],
+		#'0064' => ['master_login', 'V Z24 Z24 C', [qw(version username password master_version)]],
+		'0064' => ['master_login', 'V Z24 a24 C', [qw(version username password_rijndael master_version)]],
 		'0065' => ['game_login', 'a4 a4 a4 v C', [qw(accountID sessionID sessionID2 userLevel accountSex)]],
 		'0066' => ['char_login', 'C', [qw(slot)]],
-		'0067' => ['char_create'], # TODO
+		'0067' => ['character_create', 'Z24 C7 v2', [qw(name str agi vit int dex luk slot hair_color hair_style)]],
 		'0068' => ['char_delete'], # TODO
 		'0072' => ['map_login', 'a4 a4 a4 V C', [qw(accountID charID sessionID tick sex)]],
 		'007D' => ['map_loaded'], # len 2
@@ -56,6 +57,7 @@ sub new {
 		'009B' => ['actor_look_at', 'v C', [qw(head body)]],
 		'009F' => ['item_take', 'a4', [qw(ID)]],
 		'00A2' => ['item_drop', 'v2', [qw(index amount)]],
+		'00A7' => ['item_use', 'v a4', [qw(index targetID)]],
 		'00A9' => ['send_equip', 'v2', [qw(index type)]],#6
 		'00B2' => ['restart', 'C', [qw(type)]],
 		'00B8' => ['npc_talk_response', 'a4 C', [qw(ID response)]],
@@ -102,6 +104,7 @@ sub new {
 		'0360' => ['sync', 'V', [qw(time)]],
 		'0361' => ['actor_look_at', 'v C', [qw(head body)]],
 		'0362' => ['item_take', 'a4', [qw(ID)]],
+		#'0362' => ['item_take', 'x4 a4', [qw(ID)]],
 		'0363' => ['item_drop', 'v2', [qw(index amount)]],
 		'0364' => ['storage_item_add', 'v V', [qw(index amount)]],
 		'0365' => ['storage_item_remove', 'v V', [qw(index amount)]],
@@ -130,17 +133,236 @@ sub new {
 		'08BA' => ['new_pin_password','a4 Z*', [qw(accountID pin)]],
 		'08C9' => ['request_cashitems'],#2
 		'0987' => ['master_login', 'V Z24 a32 C', [qw(version username password_md5_hex master_version)]],
-		'0970' => ['char_create', 'a24 C v2', [qw(name, slot, hair_style, hair_color)]],
+		'0970' => ['character_create', 'Z24 C v2', [qw(name slot hair_color hair_style)]],
+		'098F' => ['char_delete2_accept', 'v a4 a*', [qw(length charID code)]],
+		'08BE' => ['change_pin_password','a*', [qw(accountID oldPin newPin)]], # TODO: PIN change system/command?
 		'0998' => ['send_equip', 'v V', [qw(index type)]],#8
+		'0A25' => ['achievement_get_reward', 'V', [qw(ach_id)]],
+		'09E9' => ['rodex_close_mailbox'],   # 2 -- RodexCloseMailbox
+		'09EF' => ['rodex_refresh_maillist', 'C V2', [qw(type mailID1 mailID2)]],   # 11 -- RodexRefreshMaillist
+		'09F5' => ['rodex_delete_mail', 'C V2', [qw(type mailID1 mailID2)]],   # 11 -- RodexDeleteMail
+		'09EA' => ['rodex_read_mail', 'C V2', [qw(type mailID1 mailID2)]],   # 11 -- RodexReadMail
+		'09E8' => ['rodex_open_mailbox', 'C V2', [qw(type mailID1 mailID2)]],   # 11 -- RodexOpenMailbox
+		'09EE' => ['rodex_next_maillist', 'C V2', [qw(type mailID1 mailID2)]],   # 11 -- RodexNextMaillist
+		'09F1' => ['rodex_request_zeny', 'V2 C', [qw(mailID1 mailID2 type)]],   # 11 -- RodexRequestZeny
+		'09F3' => ['rodex_request_items', 'V2 C', [qw(mailID1 mailID2 type)]],   # 11 -- RodexRequestItems
+		'0A03' => ['rodex_cancel_write_mail'],   # 2 -- RodexCancelWriteMail
+		'0A04' => ['rodex_add_item', 'v2', [qw(index amount)]],   # 6 -- RodexAddItem
+		'0A06' => ['rodex_remove_item', 'v2', [qw(index amount)]],   # 6 -- RodexRemoveItem
+		'0A08' => ['rodex_open_write_mail', 'Z24', [qw(name)]],   # 26 -- RodexOpenWriteMail
+		'0A13' => ['rodex_checkname', 'Z24', [qw(name)]],   # 26 -- RodexCheckName
+		'0A6E' => ['rodex_send_mail', 'v Z24 Z24 V2 v v V', [qw(len receiver sender zeny1 zeny2 title_len text_len char_id)]],
+		'0A69' => ['rodex_send_mail', 'v Z24 Z24 V2 v v V', [qw(len receiver sender zeny1 zeny2 title_len text_len char_id)]],
+		'0003' => ['sendFriendRemove'],
+		'0026' => ['sendCartAdd'],
+		'0027' => ['sendCartGet'],
+		'0029' => ['sendStorageAddFromCart'],
+		'00130' => ['sendEnteringVender'],
+		'002A' => ['sendCompanionRelease'],
+		'007C' => ['sendCardMerge'],
+		'007A' => ['sendCardMergeRequest'],
+		'00BB' => ['sendAddStatusPoint'],
+		'00BF' => ['sendEmotion'],
+		'00C5' => ['sendNPCBuySellList'],
+		'00C8' => ['sendBuyBulk'],
+		'00C9' => ['sendSellBulk'],
+		'00CE' => ['sendAutoSpell'],
+		'00DE' => ['sendChatRoomChange'],
+		'00D5' => ['sendChatRoomCreate'],
+		'00D9' => ['sendChatRoomJoin'],
+		'00E0' => ['sendChatRoomBestow'],
+		'00E2' => ['sendChatRoomKick'],
+		'00E3' => ['sendChatRoomLeave'],
+		'00E4' => ['sendDeal'],
+		'00E6' => ['sendDealReply'],
+		'00E7' => ['sendSuperNoviceDoriDori'],
+		'00E8' => ['sendDealAddItem'],
+		'00EB' => ['sendDealOK'],
+		'00ED' => ['sendCurrentDealCancel'],
+		'00EF' => ['sendDealTrade'],
+		'00F7' => ['sendStorageClose'],
+		'0100' => ['sendPartyLeave'],
+		'0112' => ['sendAddSkillPoint'],
+		'0159' => ['sendGuildLeave'],
+		'011B' => ['sendWarpTele'],
+		'016B' => ['sendGuildJoin'],
+		'019F' => ['sendPetCapture'],
+		'01A1' => ['sendPetMenu'],
+		'01A7' => ['sendPetHatch'],
+		'01A5' => ['sendPetName'],
+		'01AF' => ['sendChangeCart'],
+		'01CA' => ['sendRequestMakingHomunculus'],
+		'0231' => ['sendHomunculusName'],
+		'024B' => ['sendAuctionAddItemCancel'],
+		'024C' => ['sendAuctionAddItem'],
+		'024E' => ['sendAuctionCancel'],
+		'024F' => ['sendAuctionBuy'],
+		'0251' => ['sendAuctionItemSearch'],
+		'029F' => ['sendMercenaryCommand'],
+		'025B' => ['sendCooking'],
+		'02C7' => ['sendPartyJoinRequestByNameReply'],
 		'09A1' => ['sync_received_characters'],
 		'09D0' => ['gameguard_reply'],
 		'09D4' => ['complete_selling'],
-		#'08BE' => ['change_pin_password','a*', [qw(accountID oldPin newPin)]], # TODO: PIN change system/command?
+		'07E5' => ['sendCaptchaInitiate'],
+		'07E7' => ['sendCaptchaAnswer'],
+
 	);
 	$self->{packet_list}{$_} = $packets{$_} for keys %packets;
 
 	return $self;
 }
+
+sub rodex_delete_mail {
+	my ($self, $type, $mailID1, $mailID2) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_delete_mail',
+		type => $type,
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+	}));
+}
+
+sub rodex_request_zeny {
+	my ($self, $mailID1, $mailID2, $type) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_request_zeny',
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+		type => $type,
+	}));
+}
+
+sub rodex_request_items {
+	my ($self, $mailID1, $mailID2, $type) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_request_items',
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+		type => $type,
+	}));
+}
+
+sub rodex_cancel_write_mail {
+	my ($self) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_cancel_write_mail',
+	}));
+	undef $rodexWrite;
+}
+
+sub rodex_add_item {
+	my ($self, $index, $amount) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_add_item',
+		index => $index,
+		amount => $amount,
+	}));
+}
+
+sub rodex_remove_item {
+	my ($self, $index, $amount) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_remove_item',
+		index => $index,
+		amount => $amount,
+	}));
+}
+
+sub rodex_open_write_mail {
+	my ($self, $name) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_open_write_mail',
+		name => $name,
+	}));
+}
+
+sub rodex_checkname {
+	my ($self, $name) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_checkname',
+		name => $name,
+	}));
+}
+
+sub rodex_send_mail {
+	my ($self) = @_;
+	
+	my $title_len = length($rodexWrite->{title});
+	my $text_len = length($rodexWrite->{body});
+	
+	my $header_pack = 'v Z24 Z24 V2 v2 V';
+	my $header_base_len = ((length pack $header_pack) + 2);
+	my $len = $header_base_len + $text_len + $title_len;
+	
+	my $base_pack = $self->reconstruct({
+		switch => 'rodex_send_mail',
+		len => $len,
+		receiver => $rodexWrite->{target}{name},
+		sender => $char->{name},
+		zeny1 => $rodexWrite->{zeny},
+		zeny2 => 0,
+		title_len => $title_len,
+		text_len => $text_len,
+		char_id => $rodexWrite->{target}{char_id}
+	});
+	
+	my $title = stringToBytes($rodexWrite->{title});
+	my $body = stringToBytes($rodexWrite->{body});
+	
+	my $pack = $base_pack . $title . $body;
+	
+	$self->sendToServer($pack);
+}
+
+sub rodex_refresh_maillist {
+	my ($self, $type, $mailID1, $mailID2) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_refresh_maillist',
+		type => $type,
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+	}));
+}
+
+sub rodex_read_mail {
+	my ($self, $type, $mailID1, $mailID2) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_read_mail',
+		type => $type,
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+	}));
+}
+
+sub rodex_next_maillist {
+	my ($self, $type, $mailID1, $mailID2) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_next_maillist',
+		type => $type,
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+	}));
+}
+
+sub rodex_open_mailbox {
+	my ($self, $type, $mailID1, $mailID2) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_open_mailbox',
+		type => $type,
+		mailID1 => $mailID1,
+		mailID2 => $mailID2,
+	}));
+}
+
+sub rodex_close_mailbox {
+	my ($self) = @_;
+	$self->sendToServer($self->reconstruct({
+		switch => 'rodex_close_mailbox',
+	}));
+	undef $rodexList;
+}
+
 
 sub version {
 	return $masterServer->{version} || 1;
@@ -422,7 +644,7 @@ sub sendEmotion {
 
 sub sendEnteringVender {
 	my ($self, $ID) = @_;
-	my $msg = pack("C*", 0x30, 0x01) . $ID;
+	my $msg = pack("C*", 0x0130, 0x01) . $ID;
 	$self->sendToServer($msg);
 	debug "Sent Entering Vender: ".getHex($ID)."\n", "sendPacket", 2;
 }
@@ -942,6 +1164,7 @@ sub sendWarpTele { # type: 26=tele, 27=warp
 	my ($self, $skillID, $map) = @_;
 	my $msg = pack('v2 Z16', 0x011B, $skillID, stringToBytes($map));
 	$self->sendToServer($msg);
+	$self->sendTalkCancel;
 	debug "Sent ". ($skillID == 26 ? "Teleport" : "Open Warp") . "\n", "sendPacket", 2
 }
 =pod
@@ -1227,4 +1450,31 @@ sub sendCaptchaAnswer {
 
 # 0x0204,18
 
+sub sendAchievementGetReward {
+ 	my ($self, $ach_id) = @_;
+ 	my $msg = pack("C*", 0x25, 0x0A) . pack("V", $ach_id);
+ 	$self->sendToServer($msg);
+ }
+
+# Captcha
+# TODO: what is 0x12?
+sub sendCaptchaInitiate {
+	my ($self) = @_;
+	my $msg = pack('v2 a4', 0x07E5, 0x12, $accountID);
+	$self->sendToServer($msg);
+	debug "Sending Captcha Initiate\n";
+}
+
+#0x07e7,32
+# TODO: what is 0x20?
+sub sendCaptchaAnswer {
+	my ($self, $answer) = @_;
+	my $msg = pack('v2 a4 a24', 0x07E7, 0x20, $accountID, $answer);
+	$self->sendToServer($msg);
+	debug "Sending Captcha Answer $msg \n";
+	
+}
+ 
+ 
+ 
 1;

@@ -162,6 +162,7 @@ sub game_login {
 					0, 0, 1,
 					$field?$field->baseName:'prontera',
 					0,
+					$char->{sex},
 				);
 			}
 			
@@ -271,6 +272,7 @@ sub sendCharInfo {
 				0, 0, 0,
 				$field->baseName,
 				0,
+				$char->{sex},
 			);
 		}
 		# FIXME
